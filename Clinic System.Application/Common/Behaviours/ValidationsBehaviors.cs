@@ -1,0 +1,41 @@
+﻿
+
+namespace Clinic_System.Application.Common.Behaviours
+{
+    public class ValidationsBehaviors<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse> where TRequest : IRequest<TResponse>
+    {
+        private readonly IEnumerable<IValidator<TRequest>> _validators;
+        private readonly ILogger<ValidationsBehaviors<TRequest, TResponse>> _logger;
+        public ValidationsBehaviors(IEnumerable<IValidator<TRequest>> validators, ILogger<ValidationsBehaviors<TRequest, TResponse>> logger)
+        {
+            _validators = validators;
+            _logger = logger;
+        }
+        public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("Validating command {CommandType}", typeof(TRequest).Name);
+            if (_validators.Any())
+            {
+                var context = new ValidationContext<TRequest>(request);
+                var validationResult = await Task.WhenAll(_validators.Select(v => v.ValidateAsync(context, cancellationToken)));
+                var failures = validationResult.SelectMany(r => r.Errors).Where(f => f != null).ToList();
+                if (failures.Count != 0)
+                {
+                    var messages = failures.Select(x => x.PropertyName + ": " + x.ErrorMessage).ToList();
+
+                    _logger.LogError("Validation errors - {CommandType} - Command: {@Command} - Errors: {@ValidationErrors}",
+                        typeof(TRequest).Name, request, messages);
+
+                    throw new ApiException(
+                        "Validation Failed",
+                        400,
+                        messages
+                    );
+                }
+            }
+            _logger.LogInformation("Validation successful for command {CommandType}", typeof(TRequest).Name);
+            return await next();
+
+        }
+    }
+}

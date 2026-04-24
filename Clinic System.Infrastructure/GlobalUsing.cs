@@ -1,0 +1,11 @@
+﻿global using Clinic_System.Application.Service.Interface;
+global using Clinic_System.Core.Entities;
+global using Clinic_System.Infrastructure.Authentication.Models;
+global using Clinic_System.Infrastructure.Identity;
+global using Microsoft.AspNetCore.Identity;
+global using Microsoft.Extensions.Options;
+global using Microsoft.IdentityModel.Tokens;
+global using System.IdentityModel.Tokens.Jwt;
+global using System.Security.Claims;
+global using System.Security.Cryptography;
+global using System.Text;

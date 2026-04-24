@@ -1,0 +1,311 @@
+﻿
+
+using Clinic_System.Core.Exceptions;
+using Microsoft.AspNetCore.WebUtilities;
+
+namespace Clinic_System.Infrastructure.Services.Identity
+{
+    public class IdentityService : IIdentityService
+    {
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
+        public IdentityService(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
+        {
+            _userManager = userManager;
+            _signInManager = signInManager;
+        }
+
+        public async Task<bool> ChangePasswordAsync(string userId, string currentPassword, string newPassword, bool isAdmin, CancellationToken cancellationToken = default)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return false;
+            if (string.IsNullOrWhiteSpace(newPassword))
+                throw new DomainException("Password cannot be empty");
+
+            IdentityResult result;
+
+            if (isAdmin)
+            {
+                var removeResult = await _userManager.RemovePasswordAsync(user);
+                if (!removeResult.Succeeded) throw new Exception("Failed to reset existing password.");
+
+                result = await _userManager.AddPasswordAsync(user, newPassword);
+            }
+            else
+            {
+                result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            }
+
+            if (!result.Succeeded)
+            {
+                var error = result.Errors.FirstOrDefault()?.Description ?? "Failed to update password.";
+                if (result.Errors.Any(e => e.Code == "PasswordMismatch"))
+                    throw new UnauthorizedAccessException();
+
+                throw new Exception(error);
+            }
+
+            return true;
+        }
+
+        public async Task<bool> ConfirmEmailAsync(string userId, string code)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return false;
+
+            var result = await _userManager.ConfirmEmailAsync(user, code);
+            return result.Succeeded;
+        }
+
+        public async Task<string> CreateUserAsync(string userName, string email, string password, string role, CancellationToken cancellationToken = default)
+        {
+            // Validation
+            if (string.IsNullOrWhiteSpace(userName))
+                throw new DomainException("User name cannot be empty");
+
+            if (string.IsNullOrWhiteSpace(email))
+                throw new DomainException("Email cannot be empty");
+
+            if (string.IsNullOrWhiteSpace(password))
+                throw new DomainException("Password cannot be empty");
+
+            var user = new ApplicationUser
+            {
+                UserName = userName,
+                Email = email
+            };
+
+            var result = await _userManager.CreateAsync(user, password);
+
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                throw new DomainException($"Failed to create user: {errors}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                var roleResult = await _userManager.AddToRoleAsync(user, role);
+                if (!roleResult.Succeeded)
+                {
+                    var roleErrors = string.Join(", ", roleResult.Errors.Select(e => e.Description));
+                    throw new DomainException($"Failed to assign role: {roleErrors}");
+                }
+            }
+
+            return user.Id;
+        }
+
+        public async Task<string> CreateUserForGoogleAsync(string userName, string email, string role, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+                throw new DomainException("Username cannot be empty");
+            if (string.IsNullOrWhiteSpace(email))
+                throw new DomainException("Email cannot be empty");
+
+            var user = new ApplicationUser
+            {
+                UserName = userName,
+                Email = email,
+                EmailConfirmed = true
+            };
+            var result = await _userManager.CreateAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                throw new DomainException($"Failed to create Google user: {errors}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                var roleResult = await _userManager.AddToRoleAsync(user, role);
+                if (!roleResult.Succeeded)
+                {
+                    var roleErrors = string.Join(", ", roleResult.Errors.Select(e => e.Description));
+                    throw new DomainException($"Failed to assign role: {roleErrors}");
+                }
+            }
+
+            return user.Id;
+        }
+
+        public string DecodeToken(string encodedToken)
+        {
+            var bytes = WebEncoders.Base64UrlDecode(encodedToken);
+            return Encoding.UTF8.GetString(bytes);
+        }
+
+        public string EncodeToken(string token)
+        {
+            return WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        }
+
+        public async Task<string> GenerateEmailConfirmationTokenAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new DomainException("User not found");
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            return token;
+        }
+
+        public async Task<string> GeneratePasswordResetTokenAsync(string email)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+                throw new DomainException("User not found");
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            return token;
+        }
+
+        public Task<(string UserId, string UserName, string Role, string Token, string Error)> GenerateTokenForResendEmailConfirmationAsync(string email)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<(bool Exists, string Id, string UserName, List<string> Roles)> GetUserDetailsByEmailForGoogleAsync(string email)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+                return (false, string.Empty, string.Empty, new List<string>());
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            return (true, user.Id, user.UserName ?? string.Empty, roles.ToList());
+        }
+
+        public async Task<(string Email, string UserName)> GetUserEmailAndUserNameAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return (string.Empty, string.Empty);
+
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null)
+                return (string.Empty, string.Empty);
+
+            return (user.Email ?? string.Empty, user.UserName ?? string.Empty);
+        }
+
+        public async Task<string?> GetUserEmailAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return null;
+
+            var user = await _userManager.FindByIdAsync(userId);
+            return user?.Email;
+        }
+
+        public async Task<string?> GetUserNameAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return null;
+
+            var user = await _userManager.FindByIdAsync(userId);
+            return user?.UserName;
+        }
+
+        public async Task<bool> HardDeleteUserAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return false;
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return false;
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+
+            if (userRoles.Any())
+            {
+                await _userManager.RemoveFromRolesAsync(user, userRoles);
+            }
+
+            var result = await _userManager.DeleteAsync(user);
+            return result.Succeeded;
+        }
+
+        public async Task<bool> IsEmailUniqueAsync(string email, string? excludeUserId = null, CancellationToken cancellationToken = default)
+        {
+            var userWithEmail = await _userManager.FindByEmailAsync(email);
+            if (userWithEmail == null) return true;
+            if (excludeUserId != null && userWithEmail.Id == excludeUserId) return true;
+            return false;
+        }
+
+        public async Task<bool> IsUserNameUniqueAsync(string userName, string? excludeUserId = null, CancellationToken cancellationToken = default)
+        {
+            var user = await _userManager.FindByNameAsync(userName);
+            if (user == null) return true;
+            if (excludeUserId != null && user.Id == excludeUserId) return true;
+            return false;
+        }
+
+        public async Task<(bool IsAuthenticated, bool IsEmailConfirmed, string Id, string UserName, string Email, List<string> Roles)> LoginAsync(string userNameOrEmail, string password)
+        {
+            var user = userNameOrEmail.Contains("@")
+                ? await _userManager.FindByEmailAsync(userNameOrEmail)
+                : await _userManager.FindByNameAsync(userNameOrEmail);
+
+            if (user == null)
+            {
+                return (false, false, string.Empty, string.Empty, string.Empty, new List<string>());
+            }
+
+            var signInResult = await _signInManager.CheckPasswordSignInAsync(user, password, false);
+
+            if (!signInResult.Succeeded)
+            {
+                return (false, false, string.Empty, string.Empty, string.Empty, new List<string>());
+            }
+
+            if (!await _userManager.IsEmailConfirmedAsync(user))
+            {
+                return (true, false, user.Id, user.UserName!, user.Email!, new List<string>());
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            return (true, true, user.Id, user.UserName!, user.Email!, roles.ToList());
+        }
+
+        public async Task<(bool Succeeded, string Error)> ResetPasswordAsync(string email, string decodedToken, string newPassword)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+                return (false, "User not found");
+
+            var result = await _userManager.ResetPasswordAsync(user, decodedToken, newPassword);
+
+            if (result.Succeeded)
+            {
+                return (true, null);
+            }
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+
+            return (false, errors);
+        }
+
+        public async Task<bool> SoftDeleteUserAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return false;
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.IsDeleted)
+                return false;
+
+            // Soft Delete: Set IsDeleted and DeletedAt
+            user.IsDeleted = true;
+            user.DeletedAt = DateTime.Now;
+
+            var result = await _userManager.UpdateAsync(user);
+            return result.Succeeded;
+        }
+
+        public Task<bool> UpdateUserProfileAsync(string userId, string newEmail, string newUserName, string currentPassword, bool isAdmin, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
