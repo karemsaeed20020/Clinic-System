@@ -1,6 +1,8 @@
 ﻿
 using Clinic_System.Application.Common;
 using Clinic_System.Application.Common.Behaviours;
+using Clinic_System.Application.Service.Implemention;
+using Clinic_System.Application.Service.Interface;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Clinic_System.Application
@@ -16,7 +18,8 @@ namespace Clinic_System.Application
             services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblies(assembly));
             services.AddValidatorsFromAssembly(assembly);
             services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationsBehaviors<,>));
-
+            // Core Business Services
+            services.AddScoped<IDoctorService, DoctorService>();
 
 
             return services;

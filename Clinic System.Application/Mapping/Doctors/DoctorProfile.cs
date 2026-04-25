@@ -8,6 +8,7 @@ namespace Clinic_System.Application.Mapping.Doctors
         public DoctorProfile()
         {
             CreateDoctorMapping();
+            UpdateDoctorMapping();
         }
     }
 }

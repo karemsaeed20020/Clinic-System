@@ -1,19 +1,109 @@
-﻿
+﻿using AutoMapper;
+using Clinic_System.Application.Common;
 using Clinic_System.Application.Common.Bases;
 using Clinic_System.Application.DTOs.Doctors;
 using Clinic_System.Application.Features.Doctors.Commands.Models;
+using Clinic_System.Application.Service.Interface;
+using Clinic_System.Core.Entities;
+using Clinic_System.Core.Interfaces.UnitOfWork;
+using System.Transactions;
 
 namespace Clinic_System.Application.Features.Doctors.Commands.Handlers
 {
-    public class CreateDoctorCommandHandler : IRequestHandler<CreateDoctorCommand, Response<CreateDoctorDTO>>
+    public class CreateDoctorCommandHandler : RsponseHandler, IRequestHandler<CreateDoctorCommand, Response<CreateDoctorDTO>>
     {
-        public CreateDoctorCommandHandler()
+        private readonly IDoctorService doctorService;
+        private readonly IMapper mapper;
+        private readonly IIdentityService identityService;
+        private readonly IEmailService emailService;
+        private readonly IUnitOfWork unitOfWork;
+        private readonly ILogger<CreateDoctorCommandHandler> logger;
+        private readonly ICacheService cacheService;
+        public CreateDoctorCommandHandler(
+            IDoctorService doctorService,
+            IMapper mapper,
+            IIdentityService identityService,
+            IEmailService emailService,
+            IUnitOfWork unitOfWork,
+            ILogger<CreateDoctorCommandHandler> logger,
+            ICacheService cacheService
+        )
         {
-
+            this.doctorService = doctorService;
+            this.mapper = mapper;
+            this.identityService = identityService;
+            this.emailService = emailService;
+            this.unitOfWork = unitOfWork;
+            this.logger = logger;
+            this.cacheService = cacheService;
         }
-        public Task<Response<CreateDoctorDTO>> Handle(CreateDoctorCommand request, CancellationToken cancellationToken)
+        public async Task<Response<CreateDoctorDTO>> Handle(CreateDoctorCommand request, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            Doctor doctor = null;
+            string userId = string.Empty;
+
+            using (var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
+            {
+                logger.LogInformation("Starting the process to add a new doctor with name: {DoctorName}", request.FullName);
+                try
+                {
+                    userId = await identityService.CreateUserAsync(request.FullName, request.Email, request.Password, "Doctor", cancellationToken);
+                    doctor = mapper.Map<Doctor>(request);
+                    doctor.ApplicationUserId = userId;
+                    await doctorService.CreateDoctorAsync(doctor, cancellationToken);
+                    var result = await unitOfWork.SaveAsync();
+                    if (result == 0)
+                    {
+                        logger.LogWarning("Failed to save the doctor {DoctorName} to the database", request.FullName);
+                        return BadRequest<CreateDoctorDTO>("Failed to create doctor");
+                    }
+                    transaction.Complete();
+
+                    logger.LogInformation("Invalidating doctors cache after creating a new doctor.");
+
+                    await cacheService.RemoveByPrefixAsync("DoctorsList",
+                        $"DoctorListBySpecialization:{request.Specialization.Trim().ToLower()}");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "An error occurred while adding doctor: {DoctorName}", request.FullName);
+                    return BadRequest<CreateDoctorDTO>($"User creation failed: {ex.Message}");
+                }
+            }
+            try
+            {
+                var token = await identityService.GenerateEmailConfirmationTokenAsync(userId);
+                var encodedToken = identityService.EncodeToken(token);
+
+                var confirmationLink = $"{request.BaseUrl}/api/authentication/confirm-email?UserId={userId}&Code={encodedToken}";
+
+                var emailBody = EmailTemplates.GetEmailConfirmationTemplate(
+                                    request.FullName,
+                                    request.UserName,
+                                    request.Email,
+                                    confirmationLink,
+                                    "Doctor",
+                                    request.Specialization
+                                );
+
+                // 4. الإرسال
+                await emailService.SendEmailAsync(request.Email, "Welcome to Elite Clinic - Confirm Your Email", emailBody);
+
+                logger.LogInformation("Confirmation email sent to {Email}", request.Email);
+            }
+            catch (Exception ex)
+            {
+                // لو فشل الإيميل مش بنوقف العملية، بس بنسجل تحذير
+                logger.LogWarning(ex, "Doctor created but failed to send confirmation email to {Email}", request.Email);
+            }
+            var doctorsMapper = mapper.Map<CreateDoctorDTO>(doctor);
+
+            doctorsMapper.Email = request.Email;
+
+            var locationUri = $"/api/doctors/id/{doctor.Id}";
+
+            logger.LogInformation("Doctor {DoctorName} added successfully with ID: {DoctorId}", request.FullName, doctor.Id);
+            return Created<CreateDoctorDTO>(doctorsMapper, locationUri, "Doctor created successfully");
         }
     }
 }
