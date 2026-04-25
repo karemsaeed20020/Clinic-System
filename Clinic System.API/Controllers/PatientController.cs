@@ -1,0 +1,64 @@
+﻿using Clinic_System.API.Bases;
+using Clinic_System.Application.Features.Patients.Commands.Models;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Clinic_System.API.Controllers
+{
+    //[Authorize]
+    [Route("api/patients")]
+    [ApiController]
+    public class PatientController : AppControllerBase
+    {
+        public PatientController(IMediator mediator) : base(mediator)
+        {
+        }
+
+        [AllowAnonymous]
+        [HttpPost("create")]
+        //[EnableRateLimiting("AuthLimiter")]
+        public async Task<IActionResult> CreatePatient([FromBody] CreatePatientCommand command)
+        {
+            command.BaseUrl = $"{Request.Scheme}://{Request.Host.Value}";
+            var response = await mediator.Send(command);
+            return NewResult(response);
+        }
+
+        //[Authorize(Roles = "Admin,Patient")]
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> UpdatePatient(int id, [FromBody] UpdatePatientCommand command)
+        {
+            if (id != command.Id)
+            {
+                return BadRequest("Mismatched Patient ID");
+            }
+
+            var response = await mediator.Send(command);
+            return NewResult(response);
+        }
+
+        //[Authorize(Roles = "Admin,Patient")]
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> SoftDeletePatient(int id)
+        {
+            var response = await mediator.Send(new SoftDeletePatientCommand
+            {
+                Id = id
+            });
+            return NewResult(response);
+        }
+
+        //[Authorize(Roles = "Admin")]
+        [HttpDelete("{id:int}/hard")]
+        public async Task<IActionResult> HardDeletePatient(int id)
+        {
+            var response = await mediator.Send(new HardDeletePatientCommand
+            {
+                Id = id
+            });
+            return NewResult(response);
+        }
+
+    }
+}

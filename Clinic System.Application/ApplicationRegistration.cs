@@ -20,6 +20,7 @@ namespace Clinic_System.Application
             services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationsBehaviors<,>));
             // Core Business Services
             services.AddScoped<IDoctorService, DoctorService>();
+            services.AddScoped<IPatientService, PatientService>();
 
 
             return services;
