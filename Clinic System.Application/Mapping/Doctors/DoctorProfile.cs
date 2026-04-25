@@ -7,6 +7,10 @@ namespace Clinic_System.Application.Mapping.Doctors
     {
         public DoctorProfile()
         {
+            GetDoctorListMapping();
+            GetDoctorByIdMapping();
+            GetDoctorBasicInfoMapping();
+            GetDoctorWithAppointmentsByIdMapping();
             CreateDoctorMapping();
             UpdateDoctorMapping();
         }
