@@ -1,5 +1,6 @@
 ﻿using Clinic_System.API.Bases;
 using Clinic_System.Application.Features.Patients.Commands.Models;
+using Clinic_System.Application.Features.Patients.Queries.Models;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,67 @@ namespace Clinic_System.API.Controllers
         public PatientController(IMediator mediator) : base(mediator)
         {
         }
+
+        //[Authorize(Roles = "Admin")]
+        [HttpGet]
+        public async Task<IActionResult> GetPatientList()
+        {
+            var response = await mediator.Send(new GetPatientListQuery());
+            return Ok(response);
+        }
+
+        //[Authorize(Roles = "Admin")]
+        [HttpGet("paging")]
+        public async Task<IActionResult> GetPatientListPaging([FromQuery] GetPatientListPagingQuery query)
+        {
+            var response = await mediator.Send(query);
+            return Ok(response);
+        }
+
+        //[Authorize(Roles = "Admin,Doctor,Patient")]
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetPatientById(int id)
+        {
+            var response = await mediator.Send(new GetPatientByIdQuery
+            {
+                Id = id
+            });
+            return NewResult(response);
+        }
+
+        //[Authorize(Roles = "Admin,Doctor")]
+        [HttpGet("phone/{phone}")]
+        public async Task<IActionResult> GetPatientByPhone(string phone)
+        {
+            var response = await mediator.Send(new GetPatientByPhoneQuery
+            {
+                Phone = phone
+            });
+            return NewResult(response);
+        }
+
+        //[Authorize(Roles = "Admin")]
+        [HttpGet("name/{name}")]
+        public async Task<IActionResult> GetPatientListByName(string name)
+        {
+            var response = await mediator.Send(new GetPatientListByNameQuery
+            {
+                FullName = name
+            });
+            return NewResult(response);
+        }
+
+        //[Authorize(Roles = "Admin,Patient")]
+        [HttpGet("{id:int}/appointments")]
+        public async Task<IActionResult> GetPatientWithAppointmentsById(int id)
+        {
+            var response = await mediator.Send(new GetPatientWithAppointmentsByIdQuery
+            {
+                Id = id
+            });
+            return NewResult(response);
+        }
+
 
         [AllowAnonymous]
         [HttpPost("create")]

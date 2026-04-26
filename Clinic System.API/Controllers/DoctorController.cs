@@ -1,5 +1,6 @@
 ﻿using Clinic_System.API.Bases;
 using Clinic_System.Application.Features.Doctors.Commands.Models;
+using Clinic_System.Application.Features.Doctors.Queries.Models;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,6 +14,60 @@ namespace Clinic_System.API.Controllers
         public DoctorController(IMediator mediator) : base(mediator)
         {
         }
+        //[Authorize(Roles = "Admin")]
+        [HttpGet]
+        public async Task<IActionResult> GetDoctorList()
+        {
+            var response = await mediator.Send(new GetDoctorListQuery());
+            return Ok(response);
+        }
+
+        //[Authorize(Roles = "Admin")]
+        [HttpGet("paging")]
+        public async Task<IActionResult> GetDoctorListPaging([FromQuery] GetDoctorListPagingQuery query)
+        {
+            var response = await mediator.Send(query);
+            return Ok(response);
+        }
+        //[Authorize(Roles = "Admin,Doctor")]
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetDoctorById(int id)
+        {
+            var response = await mediator.Send(new GetDoctorByIdQuery
+            {
+                Id = id
+            });
+            return NewResult(response);
+        }
+        [HttpGet("specializations/{specialization}")]
+        public async Task<IActionResult> GetDoctorListBySpecialization(string specialization)
+        {
+            var response = await mediator.Send(new GetDoctorListBySpecializationQuery
+            {
+                Specialization = specialization
+            });
+            return NewResult(response);
+        }
+        [HttpGet("name/{name}")]
+        public async Task<IActionResult> GetDoctorListByName(string name)
+        {
+            var response = await mediator.Send(new GetDoctorListByNameQuery
+            {
+                FullName = name
+            });
+            return NewResult(response);
+        }
+        //[Authorize(Roles = "Admin,Doctor")]
+        [HttpGet("{id:int}/appointments")]
+        public async Task<IActionResult> GetDoctorWithAppointmentsById(int id)
+        {
+            var response = await mediator.Send(new GetDoctorWithAppointmentsByIdQuery
+            {
+                Id = id
+            });
+            return NewResult(response);
+        }
+
         //[Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<IActionResult> CreateDoctor([FromBody] CreateDoctorCommand command)
