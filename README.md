@@ -36,3 +36,20 @@
 - [📄 License](#-license)
 -->
 ---
+## 🎯 Overview
+
+**Elite Clinic Management System** is a modern, full-featured healthcare management platform designed to streamline clinic operations. Built with **Clean Architecture** principles and implementing **CQRS pattern with MediatR**, this system provides a robust solution for managing patients, doctors, appointments, medical records, prescriptions, and payments.
+
+### Why This System?
+
+- ✅ **Production-Ready**: Enterprise-level code quality with proper error handling and logging
+- ✅ **Scalable Architecture**: Clean Architecture ensures maintainability and testability
+- ✅ **Security First**: JWT authentication, role-based authorization, and email confirmation
+- ✅ **Real-Time Operations**: Background job processing with Hangfire
+- ✅ **Comprehensive API**: RESTful API with Swagger documentation
+- ✅ **Email Automation**: Professional HTML email templates for all notifications
+---
+
+## ✨ Key Features
+
+### 🔐 Authentication & Authorization
