@@ -158,9 +158,23 @@ namespace Clinic_System.Infrastructure.Services.Identity
             return token;
         }
 
-        public Task<(string UserId, string UserName, string Role, string Token, string Error)> GenerateTokenForResendEmailConfirmationAsync(string email)
+        public async Task<(string UserId, string UserName, string Role, string Token, string Error)> GenerateTokenForResendEmailConfirmationAsync(string email)
         {
-            throw new NotImplementedException();
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+                return (null, null, null, null, "No user found with this email.");
+
+            if (user.EmailConfirmed)
+                return (null, null, null, null, "Email is already confirmed.");
+
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var userRole = roles.FirstOrDefault();
+
+            return (user.Id, user.UserName, userRole, token, null);
         }
 
         public async Task<(bool Exists, string Id, string UserName, List<string> Roles)> GetUserDetailsByEmailForGoogleAsync(string email)
@@ -303,9 +317,33 @@ namespace Clinic_System.Infrastructure.Services.Identity
             return result.Succeeded;
         }
 
-        public Task<bool> UpdateUserProfileAsync(string userId, string newEmail, string newUserName, string currentPassword, bool isAdmin, CancellationToken cancellationToken = default)
+        public async Task<bool> UpdateUserProfileAsync(string userId, string newEmail, string newUserName, string currentPassword, bool isAdmin, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) throw new Exception("User not found");
+
+            if (!isAdmin)
+            {
+                var checkPass = await _userManager.CheckPasswordAsync(user, currentPassword);
+                if (!checkPass) throw new Exception("Invalid current password.");
+            }
+
+            if (!string.IsNullOrEmpty(newEmail) && user.Email != newEmail)
+            {
+                var result = await _userManager.SetEmailAsync(user, newEmail);
+                if (!result.Succeeded) throw new Exception(result.Errors.First().Description);
+                user.EmailConfirmed = false;
+            }
+
+            if (!string.IsNullOrEmpty(newUserName) && user.UserName != newUserName)
+            {
+                var result = await _userManager.SetUserNameAsync(user, newUserName);
+                if (!result.Succeeded) throw new Exception(result.Errors.First().Description);
+            }
+
+            await _userManager.UpdateAsync(user);
+            return true;
         }
+
     }
 }
